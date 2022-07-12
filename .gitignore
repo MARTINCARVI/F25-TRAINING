@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+.DS_Store
+venv
+.vscode
+.sonarlint
+.coverage
+uwsgi.pid
+dump.sql
+db.sqlite
+node_modules
+/dumps/
+/static/
+/medias/
+vq-django-exercise
+.env.json
