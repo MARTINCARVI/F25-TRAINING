@@ -7,6 +7,8 @@ from django.utils.translation import gettext_lazy as _
 
 from users.managers import UserManager
 
+from django.contrib.auth.models import AbstractUser
+
 
 class User(AbstractBaseUser, PermissionsMixin):
     """

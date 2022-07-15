@@ -1,5 +1,7 @@
+from attr import fields
 from django.db import models
 
+from sales.managers import ArticleQuerySet, SaleQuerySet
 
 ###################################
 # CATEGORY ARTICLE #
@@ -17,7 +19,7 @@ class ArticleCategory(models.Model):
 
     objects = models.Manager()
 
-    display_name = models.CharField("Display name", max_length=255)
+    display_name = models.CharField("Display name", max_length=255, unique=True)
 
     def __str__(self):
         return f"{self.display_name}"
@@ -49,7 +51,7 @@ class Article(models.Model):
         "Manufacturing Cost", max_digits=11, decimal_places=2
     )
 
-    # objects = SaleManager()
+    objects = ArticleQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -87,6 +89,8 @@ class Sale(models.Model):
     unit_selling_price = models.DecimalField(
         "Unit selling price", max_digits=11, decimal_places=2
     )
+
+    objects = SaleQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.date} - {self.quantity} {self.article.name}"

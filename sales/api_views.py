@@ -1,6 +1,9 @@
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg, F, Sum
 from drf_spectacular.utils import extend_schema
+from django_filters.rest_framework import DjangoFilterBackend
 
 # from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import (
@@ -15,13 +18,11 @@ from rest_framework import (
     generics,
     filters,
 )
-from rest_framework.generics import (
-    ListAPIView,
-    ListCreateAPIView,
-    RetrieveUpdateDestroyAPIView,
-)
+from rest_framework import generics
+
 
 from sales.serializers import (
+    ArticleListAgregatedSerializer,
     ArticleSerializer,
     CategoryArticleSerializer,
     UpdateSaleDeserializer,
@@ -40,8 +41,16 @@ from sales.pagination import SalesPagination
 ###################################
 
 
-class CategoryArticleCreateView(views.APIView):
+class CategoryArticleListCreateView(generics.ListCreateAPIView):
+
+    """
+    GET List of ALL Category article
+    """
+
     permissions_classes = (permissions.IsAuthenticated,)
+    queryset = ArticleCategory.objects.all()
+    serializer_class = CategoryArticleSerializer
+
     """
     CREATE a new Category article
     """
@@ -49,11 +58,17 @@ class CategoryArticleCreateView(views.APIView):
     @extend_schema(
         request=CategoryArticleSerializer, responses={201: CategoryArticleSerializer}
     )
+    # TODO : catch exception if category already exists (TRY / CATCH)
+
     def post(self, request):
         context = {"resquest": request}
         deserializer = CategoryArticleSerializer(data=request.data, context=context)
         deserializer.is_valid(raise_exception=True)
-        new_category = ArticleCategory.objects.create(**deserializer.validated_data)
+        try:
+            new_category = ArticleCategory.objects.create(**deserializer.validated_data)
+        except IntegrityError as e:
+            raise exceptions.ValidationError({"display_name": "Already exists"})
+
         serializer = CategoryArticleSerializer(instance=new_category)
         return response.Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -63,34 +78,37 @@ class CategoryArticleCreateView(views.APIView):
 ###################################
 
 
-class ArticleListView(ListCreateAPIView):
+class ArticleListCreateView(generics.ListCreateAPIView):
     """
     GET List of all Articles
     """
 
     permissions_classes = (permissions.IsAuthenticated,)
-    queryset = Article.objects.all()
     serializer_class = ArticleSerializer
+    queryset = Article.objects.all().order_by("category")
+    # DOES NOT WORK: WHY ?
+    # filter_backends = [filters.OrderingFilter]
+    ordering_fields = ["category"]
 
     """
     CREATE a new Article
     """
+    # TODO : catch exception if category already exists (TRY / CATCH)
 
     @extend_schema(request=ArticleSerializer, responses={201: ArticleSerializer})
     def post(self, request, *args, **kwargs):
         deserializer = ArticleSerializer(data=request.data)
         deserializer.is_valid(raise_exception=True)
-        new_article = Article.objects.create(**deserializer.validated_data)
+        try:
+            new_article = Article.objects.create(**deserializer.validated_data)
+        except ValidationError as e:
+            raise exceptions.ValidationError({"code": "Already exists"})
+
         serializer = ArticleSerializer(instance=new_article)
         return response.Response(data=serializer.data, status=status.HTTP_201_CREATED)
 
 
-###################################
-# SALE #
-###################################
-
-
-class SaleListAgregatedView(ListAPIView):
+class ArticleListAgregatedView(generics.ListAPIView):
     """
     GET List of all Sales sorted in the following manner:
     -> 'liste agrégée des ventes (paginée par 25 éléments également) par article avec catégorie associée,
@@ -98,60 +116,57 @@ class SaleListAgregatedView(ListAPIView):
     ordonnée par totaux des prix de vente décroissants.'
     """
 
-    total_sale_price = F("unit_selling_price") * F("quantity")
-    total_sale_cost = F("manufacturing_cost") * F("quantity")
-    business_revenue = Sum(total_sale_price)
-    margin_percentage_per_sale = (
-        100 * (total_sale_price - total_sale_cost) / total_sale_cost
-    )
+    permissions_classes = (permissions.IsAuthenticated,)
+    serializer_class = ArticleListAgregatedSerializer
+    pagination_class = SalesPagination
+    queryset = Article.objects.select_related("category").with_revenues_subquery()
+
+
+###################################
+# SALE #
+###################################
+
+
+class SaleListAgregatedView(generics.ListAPIView):
+    """
+    GET List of all Sales sorted in the following manner:
+    -> 'liste agrégée des ventes (paginée par 25 éléments également) par article avec catégorie associée,
+    totaux des prix de vente, pourcentage de marge, date de la dernière vente,
+    ordonnée par totaux des prix de vente décroissants.'
+    """
 
     permissions_classes = (permissions.IsAuthenticated,)
     serializer_class = SaleListAgregatedSerializer
     pagination_class = SalesPagination
-
-    def get_queryset(self):
-        return (
-            Sale.objects.all()
-            .select_related("article__category")
-            .values("article")
-            .annotate(
-                business_revenue=Sum(F("unit_selling_price") * F("quantity")),
-                margin_percentage_per_sale=(
-                    F("unit_selling_price") - F("article__manufacturing_cost")
-                )
-                / F("article__manufacturing_cost"),
-            )
-            .order_by("-business_revenue")
-        )
+    queryset = Sale.objects.with_revenues()
 
 
-class SaleListAllView(ListAPIView):
+class SaleListCreateView(generics.ListCreateAPIView):
     """
     GET List of all Sales
     """
 
     permissions_classes = (permissions.IsAuthenticated,)
-    queryset = Sale.objects.all()
     serializer_class = SaleSerializer
     pagination_class = SalesPagination
 
+    filter_backends = [DjangoFilterBackend]
+    # filterset_fields = ["author"]
 
-class SaleListAuthorView(ListAPIView):
     """
-    GET List of Sales, of the connected user only !
+    if the string 'author' is passed as query param, then the list of sales is filtered by the 
+    user (author) making the request
     """
-
-    permissions_classes = (permissions.IsAuthenticated,)
-    serializer_class = SaleSerializer
-    pagination_class = SalesPagination
+    # TODO: Use Django Filter Backend
 
     def get_queryset(self):
-        user = self.request.user
-        return Sale.objects.filter(author=user.pk)
+        # django drf query params
+        queryset = Sale.objects.all().order_by("-unit_selling_price")
+        author = self.request.query_params.get("author", None)
+        if author is not None:
+            queryset = queryset.filter(author=author)
+        return queryset
 
-
-class SaleCreateView(views.APIView):
-    permissions_classes = (permissions.IsAuthenticated,)
     """
     CREATE a new Sale
     """
@@ -170,7 +185,7 @@ class SaleCreateView(views.APIView):
         return response.Response(data=serializer.data, status=status.HTTP_201_CREATED)
 
 
-class RetrieveUpdateDeleteSaleView(RetrieveUpdateDestroyAPIView):
+class RetrieveUpdateDeleteSaleView(generics.RetrieveDestroyAPIView):
     """
     Retrieve (Get) a Sale by sale_id
     """
@@ -196,12 +211,13 @@ class RetrieveUpdateDeleteSaleView(RetrieveUpdateDestroyAPIView):
         serializer = UpdateSaleSerializer(instance=sale)
         return response.Response(data=serializer.data, status=status.HTTP_202_ACCEPTED)
 
-    """
-    Delete a Sale by sale_id
-    """
-
-    @extend_schema(request=None, responses={204: None})
-    def delete(self, request, *args, **kwargs):
-        sale = get_object_or_404(Sale, pk=kwargs["pk"])
-        sale.delete()
-        return response.Response("Sale deleted", status=status.HTTP_204_NO_CONTENT)
+    # DELETE -> RetrieveDestroyAPIView does not provide any response: empty 204
+    # """
+    # Delete a Sale by sale_id
+    # """
+    # # SUPPRESS DELETE
+    # @extend_schema(request=None, responses={204: None})
+    # def delete(self, request, *args, **kwargs):
+    #     sale = get_object_or_404(Sale, pk=kwargs["pk"])
+    #     sale.delete()
+    #     return response.Response("Sale deleted", status=status.HTTP_204_NO_CONTENT)

@@ -1,0 +1,11 @@
+[run]
+source =
+    .
+omit =
+	./venv/*
+    ./main/*
+    ./*/migrations/*
+    ./manage.py
+    ./*/management/*
+    ./*/tests/*
+    ./users/views.py

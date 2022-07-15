@@ -46,11 +46,14 @@ INSTALLED_APPS = [
     # Project's apps
     "sales",
     "users",
+    "utils",
     # External apps
     "django_extensions",
     "rest_framework",
     "rest_framework.authtoken",
+    "rest_framework_simplejwt",
     "drf_spectacular",
+    "django_filters",
 ]
 
 

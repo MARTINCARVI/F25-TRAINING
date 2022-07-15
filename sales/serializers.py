@@ -1,8 +1,8 @@
 from email.policy import default
+from unicodedata import name
 from rest_framework import serializers
 from datetime import date
 from sales.models import ArticleCategory, Article, Sale
-from users.models import User
 
 ###################################
 # CATEGORY ARTICLE #
@@ -32,6 +32,18 @@ class ArticleSerializer(serializers.Serializer):
     #     return Article.objects.create(**validated_data)
 
 
+class ArticleListAgregatedSerializer(serializers.Serializer):
+
+    # Special calculated fields:
+    business_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    # margin_percentage_per_sale = serializers.DecimalField(
+    #     max_digits=10, decimal_places=2
+    # )
+    pk = serializers.IntegerField(read_only=True)
+    name = serializers.CharField()
+    category_name = serializers.CharField(source="category.display_name")
+
+
 ###################################
 # SALE #
 ###################################
@@ -41,9 +53,9 @@ class SaleListAgregatedSerializer(serializers.Serializer):
 
     # Special calculated fields:
     business_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
-    margin_percentage_per_sale = serializers.DecimalField(
-        max_digits=10, decimal_places=2
-    )
+    # margin_percentage_per_sale = serializers.DecimalField(
+    #     max_digits=10, decimal_places=2
+    # )
 
     # Retrieved fields:
     # article__category__display_name = serializers.CharField()
@@ -82,7 +94,6 @@ class SaleCreateSerializer(serializers.Serializer):
 
 
 class UpdateSaleDeserializer(serializers.Serializer):
-    # date = serializers.DateField()
     article = serializers.PrimaryKeyRelatedField(many=False, read_only=True)
     quantity = serializers.IntegerField()
     unit_selling_price = serializers.DecimalField(max_digits=11, decimal_places=2)
