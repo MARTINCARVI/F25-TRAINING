@@ -1,5 +1,3 @@
-from email.policy import default
-from unicodedata import name
 from rest_framework import serializers
 from datetime import date
 from sales.models import ArticleCategory, Article, Sale
@@ -88,13 +86,13 @@ class SaleCreateDeserializer(serializers.Serializer):
 class SaleCreateSerializer(serializers.Serializer):
     pk = serializers.IntegerField(read_only=True)
     date = serializers.DateField()
-    article = serializers.PrimaryKeyRelatedField(many=False, read_only=True)
+    article = serializers.IntegerField()
     quantity = serializers.IntegerField()
     unit_selling_price = serializers.DecimalField(max_digits=11, decimal_places=2)
 
 
 class UpdateSaleDeserializer(serializers.Serializer):
-    article = serializers.PrimaryKeyRelatedField(many=False, read_only=True)
+    # article = serializers.PrimaryKeyRelatedField(many=False, read_only=True)
     quantity = serializers.IntegerField()
     unit_selling_price = serializers.DecimalField(max_digits=11, decimal_places=2)
 
@@ -102,6 +100,6 @@ class UpdateSaleDeserializer(serializers.Serializer):
 class UpdateSaleSerializer(serializers.Serializer):
     pk = serializers.IntegerField(read_only=True)
     date = serializers.DateField()
-    article = serializers.PrimaryKeyRelatedField(many=False, read_only=True)
+    # article = serializers.PrimaryKeyRelatedField(many=False, read_only=True)
     quantity = serializers.IntegerField()
     unit_selling_price = serializers.DecimalField(max_digits=11, decimal_places=2)

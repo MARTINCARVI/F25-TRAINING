@@ -57,5 +57,5 @@ class ArticleListCreateViewTest(BaseAuthTestMixin, PrettyAssertAPITestCase):
         )
         response = self.client.get(path=reverse("sales:article"))
         self.assertEqual(response.status_code, 200, response.data)
-        print(response.data)
+
         self.assertEqual(response.data[-1]["name"], "Article test 3", response.data)
